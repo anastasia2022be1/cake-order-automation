@@ -1,0 +1,597 @@
+{
+  "name": "Створення генератора відповідей на запити клієнтів",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1440,
+        192
+      ],
+      "id": "a7ff967c-3ddc-4388-9a78-a66821a61f04",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "TDOOZM3FE5nVnWK2",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a data extraction assistant.\n\nYour task: extract structured data from the email body provided by the user.\n\nReturn ONLY a valid JSON object. No explanations, no markdown, no extra text before or after.\n\nRequired fields:\n- \"name\" — full name of the sender (string). If not found, use null, look for the signature at the END of the email after \"З повагою\", \"Щиро\", \"З пошаною\"\n- \"count\" — number of CAKES (not people, not portions) mentioned in the email. \n  Example: \"1 торт на 20 осіб\" → count: 1\n  Example: \"2 торти\" → count: 2\n  Type: integer or null if not found.\n\nExample output:\n{\"name\": \"Іван Петренко\", \"count\": 3}\n\nclients email {{ $('Gmail Trigger').item.json.snippet }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a precise data extraction engine for email processing automation.  TASK: Extract the following fields from the email body and return them as a JSON object.  FIELDS: - \"name\": Full name of the person placing the order or writing the email.   Look for signatures, greetings (\"від\", \"це\", \"пише\"), or explicit names.   Type: string or null if not found.  - \"count\": Total number of items (cakes, products, units) mentioned.   Sum all quantities if multiple items are listed.   Type: integer or null if not found.  OUTPUT RULES: 1. Return ONLY the JSON object — nothing else. 2. Do NOT add any text before or after the JSON. 3. Do NOT use markdown code blocks (no ```). 4. Do NOT explain your reasoning. 5. If a field cannot be determined, set its value to null.  OUTPUT FORMAT: {\"name\": \"...\", \"count\": ...}  EXAMPLES: Input: \"Привіт, це Марія. Хочу замовити 2 торти і 1 капкейк.\" Output: {\"name\": \"Марія\", \"count\": 3}  Input: \"Добрий день. Замовлення на 5 штук.\" Output: {\"name\": null, \"count\": 5}"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -592,
+        176
+      ],
+      "id": "ede9c6fb-82f2-4446-b258-ca70d2e39d8b",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "tencent/hy3-preview:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -576,
+        320
+      ],
+      "id": "c5dfe56f-62a0-48bb-9ac9-ea61bb3a36c5",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "JDC1UzR8Jswn3ug6",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "84890316-a676-454d-b8e1-8b17e15dd957",
+              "name": "name",
+              "value": "={{ JSON.parse($json.text).name }}",
+              "type": "string"
+            },
+            {
+              "id": "71f46d9e-9952-4a7f-adb8-1c6efdccd6bd",
+              "name": "count",
+              "value": "={{ JSON.parse($json.text).count }}",
+              "type": "number"
+            },
+            {
+              "id": "bf9eba3a-0187-4d0b-aa05-895dd1b4f8da",
+              "name": "price",
+              "value": "={{ JSON.parse($json.text).count * 1000 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -224,
+        176
+      ],
+      "id": "39954455-a7d8-40c2-b41d-8b766311a5df",
+      "name": "ParsedData"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1CmzsHeYPH9bNF1BAqw0PEhU9xoa80W8FcRDJtt8PDnc/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1CmzsHeYPH9bNF1BAqw0PEhU9xoa80W8FcRDJtt8PDnc/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            " Ім\"я": "={{ $json.name }}",
+            "Кількість тортів": "={{ $json.count }}",
+            "Дата листа ": "={{ DateTime.fromMillis(parseInt($('Gmail Trigger').item.json.internalDate)).toISO() }}",
+            "Тема листа": "={{ $('Gmail Trigger').item.json.Subject }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Дата листа ",
+              "displayName": "Дата листа ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Тема листа",
+              "displayName": "Тема листа",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": " Ім\"я",
+              "displayName": " Ім\"я",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Кількість тортів",
+              "displayName": "Кількість тортів",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        32,
+        -64
+      ],
+      "id": "f4f929fa-ea0e-4ae6-b653-9e05e391833f",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "citIQXtqvsJ2vBsQ",
+          "name": "Google Sheets account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Ти — менеджер з продажу кондитерської компанії. Твоє завдання — генерувати два поля для комерційної пропозиції українською мовою:\n\nКлієнт: {{ $json.name }}\nКількість тортів: {{ $json.count }}\n\n1. **request** — короткий опис запиту клієнта (1–2 речення). Сформулюй, що хоче клієнт, виходячи з кількості тортів. Тон — ввічливий, ділової стиль.\n\n2. **solution** — конкретна пропозиція для клієнта (3–5 речень). Опиши, що саме пропонує компанія: кількість тортів, можливості кастомізації, умови доставки, гарантії якості. Тон — впевнений, турботливий.\nВажливо: використовуй конкретні деталі з листа клієнта (тип події, кількість гостей тощо). \nНЕ використовуй корпоративний стиль якщо це особисте замовлення.\nВідповідай ТІЛЬКИ у форматі JSON без жодних коментарів:\n{\n  \"request\": \"...\",\n  \"solution\": \"...\"\n}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        16,
+        208
+      ],
+      "id": "064281de-be75-4b78-ad8a-c7e7c1db61fa",
+      "name": "Generate request solution"
+    },
+    {
+      "parameters": {
+        "model": "tencent/hy3-preview:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        16,
+        352
+      ],
+      "id": "6f4da0e7-d598-4734-b76b-bb883ded5b08",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "JDC1UzR8Jswn3ug6",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = JSON.parse($input.first().json.text);\n\nreturn [{ json: parsed }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        208
+      ],
+      "id": "b4c40604-9234-4722-b8b1-569c1e8d195f",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "copy",
+        "fileId": {
+          "__rl": true,
+          "value": "1VGkiyyUK1FtaHFXtFbBVHqaoZOTQilovdypsLDBhObs",
+          "mode": "id"
+        },
+        "name": "=Комерційна пропозиція {{ $now.toISO() }} ({{ $('ParsedData').item.json.name }})",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        576,
+        208
+      ],
+      "id": "b70f54de-e748-4051-a696-c7b006d799cb",
+      "name": "Copy temple",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "CK5NtzK7cuzFddwZ",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an email classifier for a cake shop.\n\nAnalyze the email below and determine if it is a customer request to ORDER cakes.\n\nReturn ONLY a valid JSON object:\n{\"isCakeRequest\": true}  — if the email is a cake order request\n{\"isCakeRequest\": false} — if it is spam, CV, supplier letter, or anything else\n\nNo explanations. No markdown. JSON only.\n\nEmail: {{ $json.snippet }}"
+      },
+      "id": "dd82b40c-e42a-435c-ab2c-29c2aaa1058d",
+      "name": "Classify Email",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        -1168,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-001",
+              "leftValue": "={{ JSON.parse($json.text).isCakeRequest }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c8cdce01-65b1-4a28-a329-9e1b38a48ef8",
+      "name": "Is Cake Request?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -832,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "model": "tencent/hy3-preview:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -1168,
+        352
+      ],
+      "id": "17f834f4-02f0-43ea-8a42-1951e828d15e",
+      "name": "OpenRouter Chat Model2",
+      "credentials": {
+        "openRouterApi": {
+          "id": "JDC1UzR8Jswn3ug6",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Gmail Trigger').item.json.From.replace(/.*<(.+)>/, '$1') }}",
+        "subject": "=Re: {{ $('Gmail Trigger').item.json.Subject || 'Комерційна пропозиція' }}",
+        "message": "=Доброго дня, {{ $('ParsedData').item.json.name ?? 'шановний клієнте' }}!\n\nДякуємо за ваш запит. Ми підготували для вас комерційну пропозицію.  📄 Ознайомитись з КП можна за посиланням:\n<a href=\"{{ $('Commercial Proposal Doc Link').item.json.link }}\">Відкрити комерційну пропозицію</a>\n  Якщо у вас виникнуть запитання — будемо раді допомогти. \nЗ повагою, Команда кондитерської 🎂",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        208
+      ],
+      "id": "aac3b9be-2995-4675-8d7d-792fed90eee5",
+      "name": "Send a message",
+      "webhookId": "84624811-9565-4870-890b-0a51b4580d21",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "TDOOZM3FE5nVnWK2",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "replaceAll",
+              "text": "{{date}}",
+              "replaceText": "={{ DateTime.fromISO($now.toISO()).setLocale('uk').toFormat('dd.MM.yyyy') }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": " {{name}}",
+              "replaceText": "={{ $('ParsedData').item.json.name }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{request}}",
+              "replaceText": "={{ $('Code in JavaScript').item.json.request }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{solution}}",
+              "replaceText": "={{ $('Code in JavaScript').item.json.solution }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{count}}",
+              "replaceText": "={{ String($('ParsedData').item.json.count) }}"
+            },
+            {
+              "action": "replaceAll",
+              "text": "{{price}}",
+              "replaceText": "={{ String($('ParsedData').item.json.price) }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        784,
+        208
+      ],
+      "id": "30937a6b-4079-4f58-b9b0-9b9d03c8cca2",
+      "name": "Fill the template",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "jGT16PXlfIkMmZKo",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c2029cbb-7d24-4a28-be9c-91eae6ac27eb",
+              "name": "link",
+              "value": "=https://docs.google.com/document/d/{{ $json.documentId }}/edit?tab=t.0",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        992,
+        208
+      ],
+      "id": "503dd9f9-0487-40bf-a5a3-870da82d7674",
+      "name": "Commercial Proposal Doc Link"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Classify Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "ParsedData",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ParsedData": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate request solution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate request solution",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate request solution": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Copy temple",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Copy temple": {
+      "main": [
+        [
+          {
+            "node": "Fill the template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Email": {
+      "main": [
+        [
+          {
+            "node": "Is Cake Request?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Cake Request?": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Email",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fill the template": {
+      "main": [
+        [
+          {
+            "node": "Commercial Proposal Doc Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Commercial Proposal Doc Link": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "1e82ff18-0081-4a8d-a84a-ae3eb2d86567",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4fa614bc2764dfb8d41f20c40930708d9e900e0278c66e04806b48c24647554e"
+  },
+  "id": "JxAMLbaqGXyjhey9",
+  "tags": []
+}
